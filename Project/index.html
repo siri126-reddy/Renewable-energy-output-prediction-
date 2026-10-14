@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Renewable Energy Output Prediction</title>
+
+    <link rel="stylesheet" href="style.css?v=interactive-9">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+</head>
+
+<body>
+
+    <header>
+        <h1>Renewable Energy Output Prediction</h1>
+        <p>Solar Power Prediction using Tuned XGBoost</p>
+    </header>
+
+    <main>
+
+        <section class="prediction-card">
+
+            <h2>Energy Output Prediction</h2>
+
+            <div class="preset-toolbar" role="group" aria-label="Weather presets">
+                <span class="preset-label">Conditions</span>
+                <button type="button" class="preset-button" data-preset="clear" aria-pressed="false">Clear noon</button>
+                <button type="button" class="preset-button" data-preset="cloudy" aria-pressed="false">Cloudy</button>
+                <button type="button" class="preset-button" data-preset="low-sun" aria-pressed="false">Low sunlight</button>
+            </div>
+
+            <div class="weather-lookup">
+                <label for="cityName">Current weather by city</label>
+                <div class="weather-search">
+                    <input type="search" id="cityName" placeholder="Enter a city name" autocomplete="off">
+                    <button id="fetchWeather" type="button">Use live weather</button>
+                </div>
+                <p id="weatherStatus" class="form-status" role="status" aria-live="polite"></p>
+            </div>
+
+            <form id="predictionForm" class="prediction-form">
+                <div class="field-group">
+                    <label for="plantId">Plant</label>
+                    <select id="plantId" required>
+                        <option value="4135001">Plant 1</option>
+                        <option value="4136001">Plant 2</option>
+                    </select>
+                </div>
+
+                <div class="field-row">
+                    <div class="field-group">
+                        <div class="field-heading">
+                            <label for="ambientTemperature">Ambient Temperature</label>
+                            <span class="unit-badge">°C</span>
+                            <span class="field-help" tabindex="0" role="img" aria-label="Typical ambient temperature range: 10 to 40 degrees Celsius." data-tooltip="Typical outdoor range: 10–40 °C">?</span>
+                        </div>
+                        <input type="number" id="ambientTemperature" step="0.01" required placeholder="Example: 25.5">
+                    </div>
+
+                    <div class="field-group">
+                        <div class="field-heading">
+                            <label for="moduleTemperature">Module Temperature</label>
+                            <span class="unit-badge">°C</span>
+                            <span class="field-help" tabindex="0" role="img" aria-label="Typical module temperature range: 15 to 70 degrees Celsius." data-tooltip="Typical operating range: 15–70 °C">?</span>
+                        </div>
+                        <input type="number" id="moduleTemperature" step="0.01" required placeholder="Example: 35">
+                    </div>
+                </div>
+
+                <div class="field-group">
+                    <div class="field-heading">
+                        <label for="irradiation">Irradiation</label>
+                        <span class="unit-badge">kW/m<sup>2</sup></span>
+                        <span class="field-help" tabindex="0" role="img" aria-label="Typical solar irradiation range: 0 to 1.0 kilowatts per square meter." data-tooltip="Typical sunlight range: 0–1.0 kW/m²">?</span>
+                    </div>
+                    <input type="number" id="irradiation" min="0" max="1" step="0.01" required placeholder="Example: 0.60">
+                    <div class="irradiation-control">
+                        <input type="range" id="irradiationRange" min="0" max="1" step="0.01" value="0.5" aria-label="Adjust irradiation">
+                        <p id="solarFeedback" class="solar-feedback" aria-live="polite">Moderate sunlight · 0.50</p>
+                    </div>
+                </div>
+
+                <div class="field-group">
+                    <label for="sourceKey">Source / Inverter</label>
+                    <select id="sourceKey" required>
+                        <option value="1BY6WEcLGh8j5v7">1BY6WEcLGh8j5v7</option>
+                    </select>
+                </div>
+
+                <div class="field-group">
+                    <label for="dateTime">Date &amp; Time</label>
+                    <input type="datetime-local" id="dateTime" autocomplete="off" value="2020-06-15T12:00" required>
+                </div>
+
+                <button id="predictButton" type="submit">
+                    Predict Energy Output
+                </button>
+
+                <p id="requestStatus" class="form-status" role="status" aria-live="polite"></p>
+
+            </form>
+
+        </section>
+
+
+        <section id="result" class="result-card hidden" aria-live="polite">
+            <h2>Prediction Result</h2>
+
+            <div class="result-summary">
+                <div>
+                    <p class="result-kicker">Predicted AC power</p>
+                    <div class="prediction-value">
+                        <span id="predictionValue">--</span>
+                        <span class="result-unit">kW</span>
+                    </div>
+                </div>
+                <span class="result-mark" aria-hidden="true">AC</span>
+            </div>
+
+            <div class="output-meter" role="meter" aria-label="Predicted output level" aria-valuemin="0" aria-valuemax="1000" aria-valuenow="0">
+                <span id="outputMeterFill"></span>
+            </div>
+            <div class="output-meter-scale" aria-hidden="true">
+                <span>0 kW</span>
+                <span>1,000 kW scale</span>
+            </div>
+
+            <div class="result-meta">
+                <p>Model: <strong id="modelName">Tuned XGBoost</strong></p>
+                <p>Test-set MAE: <strong>47.32 kW</strong></p>
+            </div>
+            <p id="predictionDetails" class="result-details"></p>
+
+            <section class="estimate-section" aria-labelledby="estimateTitle">
+                <div class="estimate-heading">
+                    <div>
+                        <h3 id="estimateTitle">Daily energy estimate</h3>
+                        <p>Based on the modeled hourly output profile</p>
+                    </div>
+                    <label class="tariff-field" for="exportTariff">
+                        Export tariff
+                        <span class="tariff-input">
+                            <select id="currency" aria-label="Currency">
+                                <option value="USD">USD</option>
+                                <option value="EUR">EUR</option>
+                                <option value="INR">INR</option>
+                            </select>
+                            <input type="number" id="exportTariff" min="0" step="0.01" value="0.12" aria-label="Tariff per kilowatt-hour">
+                            <span>/ kWh</span>
+                        </span>
+                    </label>
+                </div>
+                <div class="estimate-results">
+                    <div>
+                        <span>Estimated generation</span>
+                        <strong id="dailyYield">-- kWh</strong>
+                    </div>
+                    <div>
+                        <span>Suggested battery</span>
+                        <strong id="batteryCapacity">-- kWh</strong>
+                    </div>
+                    <div>
+                        <span>Potential export value</span>
+                        <strong id="exportValue">--</strong>
+                    </div>
+                </div>
+                <p class="estimate-note">Battery sizing assumes 80% usable capacity and 90% round-trip efficiency. Export value uses your tariff; estimates are not a site-specific forecast.</p>
+            </section>
+        </section>
+
+        <section id="analysisSection" class="analysis-card hidden" aria-labelledby="analysisTitle">
+            <h2 id="analysisTitle">Model analysis</h2>
+            <p id="analysisStatus" class="form-status" role="status" aria-live="polite">Waiting for a prediction.</p>
+
+            <div class="chart-block">
+                <div class="chart-heading">
+                    <h3>24-hour power profile</h3>
+                    <span>kW</span>
+                </div>
+                <div class="chart-container profile-chart-container">
+                    <canvas id="profileChart" role="img" aria-label="Predicted power output over 24 hours"></canvas>
+                </div>
+                <p class="chart-note">Illustrative profile: sunlight follows a 06:00–18:00 arc, scaled to the entered irradiation. Other weather conditions are held constant.</p>
+            </div>
+
+            <div class="chart-block">
+                <div class="chart-heading">
+                    <h3>Factors behind this prediction</h3>
+                    <span>SHAP contribution · kW</span>
+                </div>
+                <div class="chart-container contribution-chart-container">
+                    <canvas id="contributionChart" role="img" aria-label="Feature contributions for this prediction"></canvas>
+                </div>
+                <p class="chart-note">Positive contributions raise the raw model output; negative contributions lower it. Showing the largest drivers and core weather inputs.</p>
+            </div>
+        </section>
+
+        <section class="tool-card" aria-labelledby="batchTitle">
+            <h2 id="batchTitle">Batch CSV predictions</h2>
+            <p class="tool-description">Upload rows with these columns:</p>
+            <code class="csv-columns">plant_id,ambient_temperature,module_temperature,irradiation,source_key,date_time</code>
+            <div class="batch-controls">
+                <input type="file" id="csvFile" accept=".csv,text/csv" aria-label="Choose prediction CSV file">
+                <button id="runBatch" type="button">Predict CSV rows</button>
+            </div>
+            <p id="batchStatus" class="form-status" role="status" aria-live="polite"></p>
+            <a id="downloadBatch" class="download-link hidden" download="renewable_energy_predictions.csv">Download results CSV</a>
+            <p class="tool-note">CSV dates may use YYYY-MM-DD HH:MM:SS or YYYY-MM-DDTHH:MM. Maximum file size 10 MB and 5,000 rows.</p>
+        </section>
+
+        <section id="historySection" class="history-card hidden">
+            <div class="history-heading">
+                <h2>Recent Predictions</h2>
+                <button id="clearHistory" class="text-button" type="button">Clear</button>
+            </div>
+            <div id="historyList" class="history-list"></div>
+        </section>
+
+
+        <section class="model-card">
+
+            <h2>Model Performance</h2>
+
+            <div class="metrics">
+
+                <div class="metric">
+                    <span>R²</span>
+                    <strong>0.844638</strong>
+                </div>
+
+                <div class="metric">
+                    <span>RMSE</span>
+                    <strong>133.984340</strong>
+                </div>
+
+                <div class="metric">
+                    <span>MAE</span>
+                    <strong>47.321958</strong>
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+    <footer>
+        <p>
+            Renewable Energy Output Prediction |
+            XGBoost Machine Learning Project
+        </p>
+    </footer>
+
+    <script src="script.js?v=interactive-9"></script>
+
+</body>
+</html>
